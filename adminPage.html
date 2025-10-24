@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Admin Panel - Laporan Stok Bibit</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; background: #f1f5f9; color: #1e293b; margin: 0; padding: 40px 0; }
+    .container { max-width: 1100px; margin: auto; background: white; padding: 25px 30px; border-radius: 14px; box-shadow: 0 3px 12px rgba(0,0,0,0.08); }
+    h2 { text-align: center; margin-bottom: 10px; }
+    p { color: #475569; text-align: center; margin-bottom: 25px; }
+    button { border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600; margin-right: 10px; }
+    .btn-blue { background-color: #0284c7; color: white; }
+    .btn-blue:hover { background-color: #0369a1; }
+    .btn-green { background-color: #16a34a; color: white; }
+    .btn-green:hover { background-color: #15803d; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.95rem; }
+    th, td { border: 1px solid #e2e8f0; padding: 10px; text-align: left; }
+    th { background: #f8fafc; color: #334155; }
+    tr:nth-child(even) td { background: #f9fafb; }
+    .subtable th, .subtable td { border: 1px solid #cbd5e1; text-align: center; padding: 6px; font-size: 0.85rem; }
+    .approved { color: #16a34a; font-weight: bold; }
+    .pending { color: #dc2626; font-weight: bold; }
+    .footer { text-align: center; color: #94a3b8; margin-top: 30px; font-size: 0.85rem; }
+    a.wa-btn { display: inline-block; background: #16a34a; color: white; padding: 5px 10px; border-radius: 6px; text-decoration: none; font-size: 0.85rem; font-weight: 600; margin-bottom: 4px; }
+    a.wa-btn:hover { background: #15803d; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>📊 Admin Panel - Laporan Stok Bibit Nursery</h2>
+    <p>Kelola laporan mingguan, kirim link approval via WhatsApp, dan pantau status persetujuan approver.</p>
+
+    <div style="text-align:center;">
+      <button class="btn-blue" onclick="generateReport('review')">🧾 Generate Review PDF</button>
+      <button class="btn-green" onclick="generateReport('final')">✅ Generate Final PDF</button>
+    </div>
+
+    <p id="statusMsg" style="text-align:center; font-weight:500; margin-top:10px;"></p>
+
+    <h3 style="margin-top:30px;">📁 Daftar Laporan PDF</h3>
+    <table id="reportTable">
+      <thead>
+        <tr>
+          <th>Nama File</th>
+          <th>Tanggal</th>
+          <th>Link PDF</th>
+          <th>Status Approval (Per Jabatan)</th>
+          <th>Kirim WhatsApp</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td colspan="5" style="text-align:center;">Memuat data...</td></tr>
+      </tbody>
+    </table>
+
+    <div class="footer">© 2025 PT Energi Batubara Lestari — Sistem Laporan Persemaian</div>
+  </div>
+
+  <script>
+    // ==============================
+    // 🔧 KONFIGURASI
+    // ==============================
+    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxpVqCUV7KSy7T_Wufy6B6Pq1Medl7OBF7ygwUknl6bfEI6TWGuB_8DsxyhM4nkP9ee/exec";
+    const SHEETY_APPROVAL_URL = "https://api.sheety.co/68250c0c0b4a18219329ec85af45d6a4/aproval/sheet1";
+    const baseApprovalLink = "https://domain.com/approval.html"; // ganti domain kamu
+
+    const approvers = [
+      { jabatan: "GL Nursery", nama: "Bapak Syahrudin", noHp: "6281122220044" },
+      { jabatan: "Section Head", nama: "Bapak Agung Laksono", noHp: "6281122220055" },
+      { jabatan: "Dept Head Rehab", nama: "Bapak Mariano Alvarado Simamora", noHp: "6281122220066" },
+      { jabatan: "Head of Mining", nama: "Bapak Bambang Octaryono", noHp: "6281122220077" }
+    ];
+
+    document.addEventListener("DOMContentLoaded", () => {
+      loadAllData();
+    });
+
+    // ==============================
+    // 🔍 MUAT DATA LAPORAN & STATUS
+    // ==============================
+    async function loadAllData() {
+      const msg = document.getElementById("statusMsg");
+      msg.textContent = "⏳ Memuat laporan dan status approval...";
+
+      try {
+        const [reportsRes, approvalsRes] = await Promise.all([
+          fetch(`${APPS_SCRIPT_URL}?action=list`).then(r => r.json()),
+          fetch(SHEETY_APPROVAL_URL).then(r => r.json())
+        ]);
+
+        const files = [
+          ...(reportsRes.review || []).map(f => ({ ...f, type: "Review" })),
+          ...(reportsRes.final || []).map(f => ({ ...f, type: "Final" }))
+        ];
+        const approvals = approvalsRes.sheet1 || approvalsRes.approval || [];
+
+        renderReports(files, approvals);
+        msg.textContent = "";
+      } catch (err) {
+        msg.textContent = "❌ Gagal memuat data: " + err.message;
+      }
+    }
+
+    // ==============================
+    // 📊 RENDER DATA KE TABEL
+    // ==============================
+    function renderReports(files, approvals) {
+      const tbody = document.querySelector("#reportTable tbody");
+      tbody.innerHTML = "";
+
+      if (!files.length) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;">Belum ada laporan</td></tr>`;
+        return;
+      }
+
+      files.forEach(file => {
+        const periode = file.name.replace("Berita Acara Stok Bibit - ", "").replace(".pdf", "");
+        const statusList = approvers.map(a => {
+          const record = approvals.find(x => x.periode === periode && x.jabatan === a.jabatan);
+          const status = record ? record.status : "Pending";
+          const cls = status === "Approved" ? "approved" : "pending";
+          return `<td class="${cls}">${status}</td>`;
+        }).join("");
+
+        const waButtons = approvers.map(a => {
+          const approvalUrl = `${baseApprovalLink}?jabatan=${encodeURIComponent(a.jabatan)}&periode=${encodeURIComponent(periode)}`;
+          const msg = encodeURIComponent(
+`Dear ${a.nama},
+
+Mohon konfirmasi atas *Laporan Stok Bibit Nursery* periode ${periode}.
+
+Silakan buka halaman berikut untuk memberikan keputusan:
+${approvalUrl}
+
+Terima kasih atas perhatian dan kerja samanya.
+
+_Sistem Laporan Persemaian_
+PT Energi Batubara Lestari`);
+          return `<a href="https://wa.me/${a.noHp}?text=${msg}" target="_blank" class="wa-btn">Kirim ke ${a.jabatan}</a>`;
+        }).join("<br>");
+
+        tbody.insertAdjacentHTML("beforeend", `
+          <tr>
+            <td>${file.name}</td>
+            <td>${new Date(file.date).toLocaleDateString("id-ID")}</td>
+            <td><a href="${file.url}" target="_blank">📄 Lihat</a></td>
+            <td>
+              <table class="subtable" style="width:100%;">
+                <tr><th>GL</th><th>Section</th><th>Dept</th><th>Head</th></tr>
+                <tr>${statusList}</tr>
+              </table>
+            </td>
+            <td>${waButtons}</td>
+          </tr>
+        `);
+      });
+    }
+
+    // ==============================
+    // ⚙️ GENERATE LAPORAN BARU
+    // ==============================
+    function generateReport(mode) {
+      const msg = document.getElementById("statusMsg");
+      msg.textContent = `⏳ Membuat laporan ${mode.toUpperCase()}...`;
+
+      fetch(`${APPS_SCRIPT_URL}?action=generate&mode=${mode}`)
+        .then(r => r.json())
+        .then(res => {
+          msg.textContent = res.message || "✅ Laporan berhasil dibuat.";
+          loadAllData();
+        })
+        .catch(err => msg.textContent = "❌ Gagal membuat laporan: " + err.message);
+    }
+  </script>
+</body>
+</html>
