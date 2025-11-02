@@ -14,6 +14,8 @@
     .btn-blue:hover { background-color: #0369a1; }
     .btn-green { background-color: #16a34a; color: white; }
     .btn-green:hover { background-color: #15803d; }
+    .btn-purple { background-color: #7c3aed; color: white; }
+    .btn-purple:hover { background-color: #6d28d9; }
     table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.95rem; }
     th, td { border: 1px solid #e2e8f0; padding: 10px; text-align: left; }
     th { background: #f8fafc; color: #334155; }
@@ -34,6 +36,7 @@
     <div style="text-align:center;">
       <button class="btn-blue" onclick="generateReport('review')">🧾 Generate Review PDF</button>
       <button class="btn-green" onclick="generateReport('final')">✅ Generate Final PDF</button>
+      <button class="btn-purple" onclick="generateReport('all')">📦 Generate Review + Final</button>
     </div>
 
     <p id="statusMsg" style="text-align:center; font-weight:500; margin-top:10px;"></p>
@@ -61,24 +64,19 @@
     // ==============================
     // 🔧 KONFIGURASI
     // ==============================
-    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxpVqCUV7KSy7T_Wufy6B6Pq1Medl7OBF7ygwUknl6bfEI6TWGuB_8DsxyhM4nkP9ee/exec";
+    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxpVqCUV7KSy7T_Wufy6B6Pq1Medl7OBF7ygwUknl6bfEI6TWGuB_8DsxyhM4nkP9ee/exec"; 
     const SHEETY_APPROVAL_URL = "https://api.sheety.co/68250c0c0b4a18219329ec85af45d6a4/aproval/sheet1";
-    const baseApprovalLink = "https://ebastari.github.io/persetujuan/approvalPage"; // ganti domain kamu
+    const baseApprovalLink = "https://ebastari.github.io/persetujuan/approvalPage"; // URL hosting kamu
 
     const approvers = [
       { jabatan: "GL Nursery", nama: "Bapak Syahrudin", noHp: "6281122220044" },
       { jabatan: "Section Head", nama: "Bapak Agung Laksono", noHp: "6281122220055" },
-      { jabatan: "Dept Head Rehab", nama: "Bapak Mariano Alvarado Simamora", noHp: "6281122220066" },
+      { jabatan: "Dept Head Rehab", nama: "Bapak Mariano Alvarado Simamora", noHp: "6282157832272" },
       { jabatan: "Head of Mining", nama: "Bapak Bambang Octaryono", noHp: "6281122220077" }
     ];
 
-    document.addEventListener("DOMContentLoaded", () => {
-      loadAllData();
-    });
+    document.addEventListener("DOMContentLoaded", () => loadAllData());
 
-    // ==============================
-    // 🔍 MUAT DATA LAPORAN & STATUS
-    // ==============================
     async function loadAllData() {
       const msg = document.getElementById("statusMsg");
       msg.textContent = "⏳ Memuat laporan dan status approval...";
@@ -94,7 +92,6 @@
           ...(reportsRes.final || []).map(f => ({ ...f, type: "Final" }))
         ];
         const approvals = approvalsRes.sheet1 || approvalsRes.approval || [];
-
         renderReports(files, approvals);
         msg.textContent = "";
       } catch (err) {
@@ -102,9 +99,9 @@
       }
     }
 
-    // ==============================
-    // 📊 RENDER DATA KE TABEL
-    // ==============================
+    // =======================================
+    // 📄 Render Table + WhatsApp Message Fix
+    // =======================================
     function renderReports(files, approvals) {
       const tbody = document.querySelector("#reportTable tbody");
       tbody.innerHTML = "";
@@ -123,20 +120,26 @@
           return `<td class="${cls}">${status}</td>`;
         }).join("");
 
+        // ✅ Tambahkan link Review PDF ke pesan WhatsApp
         const waButtons = approvers.map(a => {
           const approvalUrl = `${baseApprovalLink}?jabatan=${encodeURIComponent(a.jabatan)}&periode=${encodeURIComponent(periode)}`;
+          const reviewUrl = file.url; // link langsung ke PDF
           const msg = encodeURIComponent(
 `Dear ${a.nama},
 
 Mohon konfirmasi atas *Laporan Stok Bibit Nursery* periode ${periode}.
 
-Silakan buka halaman berikut untuk memberikan keputusan:
+📄 *Review PDF Laporan:*
+${reviewUrl}
+
+✅ *Link Persetujuan:*
 ${approvalUrl}
 
 Terima kasih atas perhatian dan kerja samanya.
 
 _Sistem Laporan Persemaian_
-PT Energi Batubara Lestari`);
+PT Energi Batubara Lestari`
+          );
           return `<a href="https://wa.me/${a.noHp}?text=${msg}" target="_blank" class="wa-btn">Kirim ke ${a.jabatan}</a>`;
         }).join("<br>");
 
@@ -157,12 +160,16 @@ PT Energi Batubara Lestari`);
       });
     }
 
-    // ==============================
-    // ⚙️ GENERATE LAPORAN BARU
-    // ==============================
+    // =======================================
+    // ⚙️ Generate Report
+    // =======================================
     function generateReport(mode) {
       const msg = document.getElementById("statusMsg");
-      msg.textContent = `⏳ Membuat laporan ${mode.toUpperCase()}...`;
+      if (mode === "all") {
+        msg.textContent = "⏳ Membuat dua laporan (Review & Final)...";
+      } else {
+        msg.textContent = `⏳ Membuat laporan ${mode.toUpperCase()}...`;
+      }
 
       fetch(`${APPS_SCRIPT_URL}?action=generate&mode=${mode}`)
         .then(r => r.json())
@@ -175,4 +182,3 @@ PT Energi Batubara Lestari`);
   </script>
 </body>
 </html>
-
